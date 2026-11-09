@@ -1,6 +1,6 @@
 # Resonance Engine
 
-**[▶ Play it live](https://raw.githack.com/dniku/resonance-engine/master/index.html) · [CI](https://github.com/dniku/resonance-engine/actions/workflows/ci.yml)**
+**[▶ Play it live](https://raw.githack.com/thaumapolis/resonance-engine/master/index.html) · [CI](https://github.com/thaumapolis/resonance-engine/actions/workflows/ci.yml)**
 
 A toroidal field of 84×56 coupled oscillators that is also an instrument. The
 physics is genuine Kuramoto-style phase coupling, so the grid self-organises
@@ -104,13 +104,13 @@ Click **Enable audio** — browsers require a user gesture before sound.
 
 ### Live, from the repo
 
-**<https://raw.githack.com/dniku/resonance-engine/master/index.html>** runs the
+**<https://raw.githack.com/thaumapolis/resonance-engine/master/index.html>** runs the
 instrument straight out of this repo — no build, no hosting — which works only because
 the page is one file that asks for nothing else. That it really is this file is worth
 checking rather than taking on faith:
 
 ```sh
-curl -s https://raw.githack.com/dniku/resonance-engine/master/index.html | sha256sum
+curl -s https://raw.githack.com/thaumapolis/resonance-engine/master/index.html | sha256sum
 sha256sum index.html                    # same digest
 ```
 

@@ -40,7 +40,12 @@
 
   <main>
     <div id="stage" role="main" aria-label="Oscillator field">
-      <canvas id="field" width="84" height="56" role="img" aria-label="Field of 4,704 coupled oscillators. Bright areas are cells recently set in motion; the pattern drifts and organises on its own. Drag to conduct waves and play notes."></canvas>
+      <!-- width/height are a placeholder only: setupCanvasSize() derives the real
+      backing-store size from the element CSS box at boot, so the grid adapts to
+      the viewport instead of being upscaled from a fixed lattice. updateFieldLabel()
+      then writes the true oscillator count into the aria-label. -->
+      <canvas id="field" width="84" height="56" role="img"
+        aria-label="Field of coupled oscillators. Bright areas are cells recently set in motion; the pattern drifts and organises on its own. Drag to conduct waves and play notes."></canvas>
       <div id="pulses" aria-hidden="true"></div>
       <output id="note-readout" aria-live="polite" aria-atomic="true"><span id="v-note">—</span></output>
       <!--
@@ -52,9 +57,10 @@
       <div id="intro" role="dialog" aria-labelledby="intro-title" aria-describedby="intro-body">
         <h2 id="intro-title">What you are looking at</h2>
         <p id="intro-body">
-          4,704 little metronomes, each swinging at its own speed and tuned by
-          position — low on the left, high on the right. Each one nudges its four
-          neighbours, so a disturbance you make spreads outward as a wave.
+          <span id="field-count">many thousands</span> of little metronomes, each
+          swinging at its own speed and tuned by position — low on the left, high on
+          the right. Each one nudges its four neighbours, so a disturbance you make
+          spreads outward as a wave.
           <strong>Bright means recently set in motion.</strong>
         </p>
         <p>
@@ -102,7 +108,7 @@
         <label>Noise <output id="v-c-noise"></output>
           <input id="c-noise" type="range" min="0" max="0.4" step="0.005" value="0.05">
         </label>
-        <p class="hint">Coupling is the interesting dial: at 0 the grid is chaos, mid-range it forms travelling waves and spirals. Each column is tuned to a different pitch, so neighbouring columns can agree without the whole grid ever unifying — watch the waves glow, not the Order number.</p>
+        <p class="hint">Coupling is how hard each metronome pulls on its neighbours. Raise it and local groups lock together sooner and hold longer after you drag; lower it and they drift apart faster. It does <em>not</em> make the whole grid agree — the pitch spread across the screen is wider than the coupling can bridge, so <em>Order</em> stays near zero at every setting. Watch the waves glow instead of the number.</p>
       </section>
 
       <section>

@@ -17,21 +17,23 @@ centre and cooling through cyan to deep blue at the edges, running down and to t
 wrapping around the edges onto the other side.](tests/golden/firefox-wavefront.png)
 
 *A travelling wavefront, shortly after a Burst at high coupling. The picture is the
-`wavefront` golden frame the test suite pins, so this image is the thing under test. The
-`idle` and `locked` baselines are deliberately almost black — brightness maps local phase
-disagreement, and a field at rest, like a field in perfect unison, has very little of it.*
+`wavefront` golden frame the test suite pins, so this image is the thing under test. Brightness comes from a per-frame normalisation of the field's own dynamic range (see `normaliseFrame` in `src/app.js`), which is what makes these crests readable: mapped through a fixed curve the same frame sat in the bottom 30% of the palette, where every colour ramp is a single flat navy, and rendered as an empty rectangle.*
 
 ## What you are looking at
 
-4,704 little metronomes, each swinging at its own speed, arranged so **left is
+Tens of thousands of little metronomes -- the exact count depends on screen size,
+and the intro states the number for yours -- each swinging at its own speed, arranged so **left is
 low pitch and right is high**. Each one nudges its four neighbours, so a
 disturbance you make spreads outward as a wave. **Bright means recently set in
 motion** — you are watching energy, not colour and not position.
 
 **Drag anywhere.** You paint a bright trail and hear notes; higher on screen is
 higher pitch. That single gesture is the instrument. Try **Burst** (or `b`) to
-set every cell going at once, then raise **Coupling** and watch the waves travel
-further before dying out.
+set every cell going at once, then raise **Coupling** and watch local groups lock
+together sooner and hold longer. Coupling does **not** unify the whole grid: the
+pitch spread across the screen is wider than nearest-neighbour coupling can bridge,
+so the **Order** figure stays near zero at every setting -- that is the simulation
+being honest, not a broken control.
 
 A field left alone looks like dim, sparse texture. That is correct: nothing has
 been set in motion. The interesting pictures come from you, or from high coupling
@@ -269,7 +271,7 @@ Getting there disproved three things this README used to assert; see
 
 ### Golden screenshots
 
-`tests/golden/` holds twelve baselines: six for Firefox and six for Chromium,
+`tests/golden/` holds sixteen baselines: eight for Firefox and eight for Chromium,
 named `<engine>-<pose>.png`. The two engines cannot share a set -- overlapped,
 the same pose differs between them in 3.7% (`idle`) to 32% (`chrome`) of pixels
 -- and the suite derives which engines to compare from the directory contents,

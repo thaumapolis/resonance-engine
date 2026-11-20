@@ -5,6 +5,45 @@ cd "$(dirname "$0")"
 
 STATUS=0
 
+# The committed index.html is a generated artifact (src/page.template.html +
+# a bundle of src/*.js + styles.css), and it is the file to open. Until now
+# check.sh never looked at it, so CI could print ALL CHECKS PASSED while
+# validating an artifact that no longer matched its source -- which is exactly
+# what happened during a rendering change: several probe cycles measured a stale
+# bundle and concluded the edit had done nothing.
+#
+# The check rebuilds into a scratch path and compares bytes. It does not rewrite
+# index.html in place: a test step that silently fixes the tree would hide the
+# staleness it exists to detect.
+echo "== 0/4 artifact is current =="
+if NODE=$(command -v node || true) && [[ -n $NODE ]]; then
+  BUILD_TMP=$(mktemp -d "${TMPDIR:-/tmp}/re-build.XXXXXX")
+  cp -a index.html "$BUILD_TMP/committed-index.html"
+  if "$NODE" tools/build-standalone.mjs >/dev/null 2>"$BUILD_TMP/build.err"; then
+    if cmp -s index.html "$BUILD_TMP/committed-index.html"; then
+      echo "index.html matches its sources"
+    else
+      echo "FAIL: index.html is stale -- it differs from a fresh build of src/ and styles.css." >&2
+      echo "      Regenerate with: node tools/build-standalone.mjs" >&2
+      diff <(head -c 4000 "$BUILD_TMP/committed-index.html") <(head -c 4000 index.html) \
+        | head -20 >&2 || true
+      STATUS=1
+    fi
+  else
+    echo "FAIL: the standalone build itself failed." >&2
+    sed "s/^/      /" "$BUILD_TMP/build.err" >&2
+    STATUS=1
+  fi
+  # Restore the committed artifact either way so the rest of the run, and the
+  # working tree, see exactly what was checked out.
+  cp -a "$BUILD_TMP/committed-index.html" index.html
+  rm -rf "$BUILD_TMP"
+else
+  echo "FAIL: node is not on PATH, so the artifact cannot be rebuilt or verified." >&2
+  STATUS=1
+fi
+
+
 # Deno does the type check and runs the unit suite. A hardcoded store path used
 # to sit here as a fallback, which worked on the machine that wrote it and named
 # a path no other machine has. `nix-shell shell.nix` puts deno on PATH, so it is
@@ -25,7 +64,7 @@ if [[ -z $DENO ]]; then
   echo "deno is not on PATH. Run it inside the project shell: nix-shell shell.nix --run ./check.sh" >&2
 fi
 
-echo "== 1/3 type check =="
+echo "== 1/4 type check =="
 if [[ -z $DENO ]]; then
   echo "FAIL: deno unavailable, so nothing here has been type checked." >&2
   STATUS=1
@@ -35,7 +74,7 @@ else
 fi
 
 echo
-echo "== 2/3 unit + wiring tests =="
+echo "== 2/4 unit + wiring tests =="
 # The wiring test shells out to the standalone build, so it needs what that
 # build needs: --allow-run for the esbuild spawn, --allow-env to read $ESBUILD,
 # --allow-write for the .tmp directory esbuild writes through.
@@ -50,7 +89,7 @@ else
 fi
 
 echo
-echo "== 3/3 browser smoke test =="
+echo "== 3/4 browser smoke test =="
 if [[ -x .gc-roots/node/bin/node && -e .gc-roots/pw/index.js ]]; then
   PATH="$PWD/.gc-roots/node/bin:$PATH" \
   PLAYWRIGHT_BROWSERS_PATH="$PWD/.gc-roots/browsers" \

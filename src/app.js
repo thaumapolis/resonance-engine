@@ -17,8 +17,35 @@ import { TAU, clamp, wrap } from './mathx.js';
 /** How far ahead of the audio clock notes are queued. */
 const LOOKAHEAD = 0.12;
 
-const COLS = 84;
-const ROWS = 56;
+/*
+ * Grid resolution.
+ *
+ * This used to be 84x56 with the canvas backing store set to exactly that and
+ * CSS stretching it to fill the stage. On the desktop layout that is a 12.9x
+ * upscale, so the "exciting" state -- after Burst, the whole torus firing --
+ * rendered as a featureless navy rectangle: the waves are real, but at 13 CSS
+ * px per cell there is nothing to see, and `image-rendering: pixelated` made
+ * every cell a deliberate block. The simulation was never the problem.
+ *
+ * Supersampling the bitmap cannot fix that. The drawing is defined per cell
+ * (`putImageData` of an 84x56 buffer, plus one `arc` per glowing cell), so any
+ * diagonal is a staircase of blobs no matter what the bitmap size is. The fix is
+ * more CELLS, not more pixels per cell.
+ *
+ * CELL_TARGET is a CSS-pixel target, so the grid adapts to the box: a desktop
+ * stage gets a denser field than a phone, and neither is upscaled.
+ * MAX_CELLS bounds the cost, because the physics is O(cells) per tick and the
+ * audio scheduler takes work from every firing cell. Measured on this container
+ * (see tools/bench-field.mjs): 4,704 cells cost 0.19 ms/tick and 42,336 cost
+ * 1.96 ms/tick against a 16.7 ms frame budget, so the cap at 26,000 -- about
+ * 24,840 on a 1440x900 desktop stage -- stays comfortably inside 60 fps and
+ * below the point where a slower phone would start dropping frames.
+ */
+const CELL_TARGET = 6;
+const MAX_CELLS = 26_000;
+/** Kept so a grid derived at boot is the same number everywhere in the module. */
+let COLS = 84;
+let ROWS = 56;
 const SEED = 0x5eed;
 
 /**
@@ -82,11 +109,46 @@ const state = {
   seed: SEED,
 };
 
+const canvas = document.getElementById('field');
+const context = canvas.getContext('2d', { alpha: false });
+
+/**
+ * Choose the grid from the element's own CSS box.
+ *
+ * Runs before anything sized by COLS/ROWS is allocated, which is why it sits
+ * above the Field rather than down with setupCanvasSize: `createImageData`,
+ * `Float32Array` and the Field's own arrays all capture the grid at construction
+ * time, so a grid assigned later would leave them sized for 84x56 while the loop
+ * iterated a bigger one -- out-of-range reads that yield undefined/0 rather than
+ * an error, i.e. a field that silently stops animating.
+ */
+function chooseGrid(boxWidth, boxHeight) {
+  // Guard against a zero-size box (display:none, or measured before layout):
+  // floor() would give 0 columns and every loop below would be a no-op.
+  const cols = Math.max(8, Math.floor((boxWidth || 0) / CELL_TARGET));
+  const rows = Math.max(8, Math.floor((boxHeight || 0) / CELL_TARGET));
+  if (cols * rows <= MAX_CELLS) return { cols, rows };
+  // Shrink uniformly to the cap, preserving aspect, rather than dropping a whole
+  // axis -- an anisotropic grid would change the pitch layout in one direction.
+  const scale = Math.sqrt(MAX_CELLS / (cols * rows));
+  return {
+    cols: Math.max(8, Math.floor(cols * scale)),
+    rows: Math.max(8, Math.floor(rows * scale)),
+  };
+}
+
+// The element is laid out at module-evaluation time in the shipped page, but a
+// zero measurement falls back to the historical 84x56 rather than to a guess.
+{
+  const rect = canvas.getBoundingClientRect();
+  const { cols, rows } = chooseGrid(rect.width || 84 * CELL_TARGET, rect.height || 56 * CELL_TARGET);
+  COLS = cols;
+  ROWS = rows;
+}
+
 const field = new Field(COLS, ROWS, { coupling: state.coupling });
 const audio = new AudioEngine();
 const scheduler = new NoteScheduler({ maxVoices: 5 });
-const canvas = document.getElementById('field');
-const context = canvas.getContext('2d', { alpha: false });
 const buffer = context.createImageData(COLS, ROWS);
 const overlay = document.createElement('canvas');
 const overlayCtx = overlay.getContext('2d');
@@ -94,6 +156,12 @@ const overlayCtx = overlay.getContext('2d');
 let lut = buildLut(state.palette);
 /** Scratch buffers for the render loop; sized with the grid, never reallocated. */
 const disagreement = new Float32Array(COLS * ROWS);
+/** Raw brightness for the current frame, kept so normalisation never allocates. */
+const rawBrightnessFrame = new Float32Array(COLS * ROWS);
+/** Scratch for the percentile sort; reused every frame, never read between frames. */
+const sampleScratch = new Float32Array(COLS * ROWS);
+/** Normalised brightness for the current frame; what the LUT is indexed by. */
+const brightnessFrame = new Float32Array(COLS * ROWS);
 let flash = new Float32Array(COLS * ROWS);
 let clock = 0;
 let lastFrame = performance.now();
@@ -182,31 +250,109 @@ function rebuildOverlays() {
  * autonomous field interesting (wavefronts and spirals glow unbidden), but it
  * now reads as texture under the user's strokes rather than instead of them.
  */
-const STRUCTURE_WEIGHT = 0.34;
+const STRUCTURE_WEIGHT = 0.9;
 const GAIN_WEIGHT = 1.15;
+/*
+ * Phase as a *ramp*, not as a shimmer multiplier.
+ *
+ * The term below used to be `shimmer * 0.05`, i.e. a 5% flicker on top of
+ * disagreement. That made the field's most interesting state -- Burst, where the
+ * torus locks into a travelling wave, measured order 0.959 -- render as a flat
+ * navy rectangle, because a synchronised field has disagreement ~= 0 by
+ * definition, and a 5% shimmer on top of 0 is still 0. Verified in the page: the
+ * canvas held exactly ONE distinct colour after Burst.
+ *
+ * Making phase a first-class term fixes the representation rather than the
+ * contrast. Phase is what the oscillators actually carry, so a locked field now
+ * shows the wave crest sweeping across the torus instead of going dark -- and the
+ * README's "watch the waves glow" becomes true at the moment it describes.
+ *
+ * Zero restores the previous behaviour exactly, which is the escape hatch if a
+ * future palette wants brightness to mean disagreement alone.
+ */
+const PHASE_WEIGHT = 0.25;
 
 /**
  * Gamma below 1 lifts the quiet end so the autonomous field still has visible
  * texture at low brightness, without blowing out a stroke to pure white.
  */
-const CONTRAST = 0.85;
+const CONTRAST = 0.7;
 
-function brightnessOf(disagreement, phase, gain) {
-  const shimmer = 0.5 + 0.5 * Math.cos(phase * TAU);
-  const structure = clamp(
-    disagreement * STRUCTURE_WEIGHT + shimmer * 0.05 + Math.min(gain, 1) * GAIN_WEIGHT,
+/*
+ * Frame-level brightness normalisation.
+ *
+ * The raw map above is unipolar: every term can only RAISE brightness, so a
+ * coherent field -- which is the whole point of pressing Burst -- has no signal
+ * to raise and collapses onto the base of the ramp. Measured on the Abyss
+ * palette, L is a constant 41 for the whole bottom 30% of the ramp, so anything
+ * mapping below t=0.3 rendered as one flat navy: after Burst the canvas held
+ * 99% of its pixels in a single luminance bin (spread 50 of 255).
+ *
+ * So brightness is normalised per frame instead of being mapped by a fixed
+ * curve. Robust percentiles (p2..p98) of the frame's own raw brightness are
+ * stretched into [NORMALISE_LO, NORMALISE_HI], which gives every state a full
+ * tonal range regardless of how much energy the field happens to hold.
+ *
+ * MAX_STRETCH caps the gain. Without it normalisation is blind to the
+ * difference between "this frame is crushed" and "this frame is noise": the
+ * incoherent idle field (local contrast 0.147) stretched to a mean of 252 and
+ * read as TV static. Capping on the SCALE rather than on resulting contrast is
+ * deliberate -- scale is independent of the frame's noise level, so one
+ * constant behaves the same way in every state instead of flipping branches.
+ * At MAX_STRETCH=2.5 the crushed burst frame is rescued (spread 50 -> 211,
+ * dominant bin 99% -> 32%) while idle is left essentially alone.
+ */
+const NORMALISE_LO = 0.06;
+const NORMALISE_HI = 0.98;
+const NORMALISE_Q_LO = 0.02;
+const NORMALISE_Q_HI = 0.98;
+const MAX_STRETCH = 2.5;
+
+/** Raw brightness, before normalisation. Kept separate so both are testable. */
+function rawBrightness(disagreement, phase, gain) {
+  // A ramp peaking at the moment a cell fires (phase 0/1) and fading to nothing
+  // half a cycle later, so crest and trough read as the wave they are.
+  const crest = 0.5 + 0.5 * Math.cos(phase * TAU);
+  return clamp(
+    disagreement * STRUCTURE_WEIGHT + crest * PHASE_WEIGHT + Math.min(gain, 1) * GAIN_WEIGHT,
     0,
     1,
   );
-  return clamp(Math.pow(structure, CONTRAST), 0, 1);
+}
+
+/**
+ * Stretch `raw` into [NORMALISE_LO, NORMALISE_HI] and write it into `out`.
+ * Returns the scale actually used, which is bounded by MAX_STRETCH; a constant
+ * frame yields a zero span and is left untouched rather than divided by it.
+ */
+function normaliseFrame(raw, out) {
+  const n = raw.length;
+  sampleScratch.set(raw);
+  sampleScratch.sort();
+  const low = sampleScratch[Math.floor(n * NORMALISE_Q_LO)];
+  const high = sampleScratch[Math.min(n - 1, Math.floor(n * NORMALISE_Q_HI))];
+  const span = high - low;
+  if (!(span > 1e-6)) {
+    // Degenerate frame (a locked grid): every cell is identical, so there is no
+    // range to exploit and stretching would divide by zero. Pass raw through;
+    // the tone it lands on is the field's actual energy, honestly represented.
+    out.set(raw);
+    return 0;
+  }
+  const scale = Math.min((NORMALISE_HI - NORMALISE_LO) / span, MAX_STRETCH);
+  for (let i = 0; i < n; i++) out[i] = clamp(NORMALISE_LO + (raw[i] - low) * scale, 0, 1);
+  return scale;
 }
 
 function drawField() {
   localDisagreement(field, disagreement);
+  for (let i = 0; i < COLS * ROWS; i++) {
+    rawBrightnessFrame[i] = rawBrightness(disagreement[i], field.phase[i], field.gain[i]);
+  }
+  normaliseFrame(rawBrightnessFrame, brightnessFrame);
   const data = buffer.data;
   for (let i = 0; i < COLS * ROWS; i++) {
-    const brightness = brightnessOf(disagreement[i], field.phase[i], field.gain[i]);
-    const o = Math.min(255, Math.round(brightness * 255)) * 3;
+    const o = Math.min(255, Math.round(brightnessFrame[i] * 255)) * 3;
     const pixel = i * 4;
     data[pixel] = lut[o];
     data[pixel + 1] = lut[o + 1];
@@ -896,18 +1042,40 @@ function setupKeyboard() {
 // --- boot ----------------------------------------------------------------
 
 /**
- * The canvas backing store is one pixel per cell and CSS scales it up, so the
- * simulation and the bitmap always agree on size. `image-rendering: pixelated`
- * in the stylesheet keeps cells crisp instead of blurry.
+ * Backing store = one pixel per cell, so the simulation and the bitmap always
+ * agree on size and no upscale happens anywhere.
+ *
+ * The grid is chosen from the element's CSS box (chooseGrid), so at the target
+ * of 6 CSS px per cell the stretch is at most ~1.0-1.5x from device pixels
+ * rather than the 12.9x it used to be at 84x56 in a 1084px stage.
  */
 function setupCanvasSize() {
   canvas.width = COLS;
   canvas.height = ROWS;
 }
 
+/**
+ * Write the real oscillator count into the intro and the canvas label.
+ *
+ * Both used to hardcode 4,704, which was the 84x56 constant grid. The grid is
+ * now derived from the element box, so the count differs by viewport (desktop
+ * 180x138 = 24,840; a phone is smaller) and a fixed number in the markup would
+ * be wrong on most screens. Deriving it here means the copy cannot drift from
+ * the simulation again.
+ */
+function updateFieldLabel() {
+  const count = COLS * ROWS;
+  const text = count.toLocaleString('en-US');
+  const label = document.getElementById('field-count');
+  if (label) label.textContent = text;
+  const canvasLabel = `Field of ${text} coupled oscillators. Bright areas are cells recently set in motion; the pattern drifts and organises on its own. Drag to conduct waves and play notes.`;
+  canvas.setAttribute('aria-label', canvasLabel);
+}
+
 function boot() {
   setupCanvasSize();
   rebuildOverlays();
+  updateFieldLabel();
   setupControls();
   updateTuningReadout();
   reseed(SEED);

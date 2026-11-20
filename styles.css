@@ -155,7 +155,15 @@ main {
    * "the toy does nothing".
    */
   touch-action: none;
-  image-rendering: pixelated;
+  /*
+   * `image-rendering: pixelated` was removed deliberately. It was paired with a
+   * backing store of 84x56 stretched to ~1084 CSS px, where it read as crisp
+   * pixel-art but was actually a 12.9x nearest-neighbour upscale: cells were
+   * visible as blocks and the wave structure was invisible. The grid is now
+   * derived from this element's box (CELL_TARGET in app.js) so the store is near
+   * 1:1 with device pixels, and there is nothing left to harden. Do not re-add
+   * it as a "sharpness" fix -- with a correct store it only adds jaggies.
+   */
 }
 
 #pulses {

@@ -1,8 +1,12 @@
 # Resonance Engine
 
+<!-- Front page image: docs/card.png -->
+
 **[▶ Play it live](https://raw.githack.com/thaumapolis/resonance-engine/master/index.html) · [CI](https://github.com/thaumapolis/resonance-engine/actions/workflows/ci.yml)**
 
-A toroidal field of 84×56 coupled oscillators that is also an instrument. The
+A toroidal field of coupled oscillators -- some 24,840 of them on a desktop
+screen, fewer on a phone, since the grid is derived from the window rather than
+fixed -- that is also an instrument. The
 physics is genuine Kuramoto-style phase coupling, so the grid self-organises
 into travelling waves and spirals; the music is generated from the same
 dynamics, so you hear the synchronisation rather than merely watch it.
@@ -11,6 +15,10 @@ Conduct waves with the pointer, and the field composes the consequences: your
 playing competes with the autonomous part for a shared polyphony budget, and
 with *Self-hearing* on, every note you play biases the whole field's tempo
 toward itself, so the instrument partially tunes itself.
+
+![Broad diagonal bands of cyan light breaking out of a deep navy field, brighter and smoother toward the lower right and grainier toward the upper left.](docs/card.png)
+
+*Six seconds after a Burst: the whole torus is set going at once and breaks into travelling bands as it falls out of lockstep. This is the image on the front page; `node tools/capture-card.mjs` regenerates it.*
 
 ![Four bright diagonal wave crests crossing a black field: narrow bands, white-hot at the
 centre and cooling through cyan to deep blue at the edges, running down and to the right and
@@ -524,7 +532,7 @@ behaviour instead of passing on the old.
 - Coupling is nearest-neighbour on a 2-torus, so the field organises into waves
   rather than the near-1.0 global locking of an all-to-all network. That is the
   physics, not a shortfall; the tests assert against the disordered baseline.
-- The field is a fixed 84×56; there is no resize or save/restore of settings.
+- The grid is derived once at boot from the element's box, so rotating a phone or resizing a window does not rebuild it -- you get the resolution of the shape you opened it in. There is also no save/restore of settings.
 
 ## Next iteration
 

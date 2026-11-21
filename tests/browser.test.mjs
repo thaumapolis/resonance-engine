@@ -478,8 +478,15 @@ try {
         await driver.waitForTimeout(1500);
         return driver.evaluate(() => Number(document.getElementById('v-local').textContent));
       };
+      // Read the bound off the control rather than hardcoding it: a value above the
+      // slider's maximum is silently clamped by the input element, which would make
+      // the wait below never match and the failure read as "the dial is broken" when
+      // only the test had fallen behind the markup.
+      const maxCoupling = await driver.evaluate(
+        () => Number(document.getElementById('c-coupling').max),
+      );
       const quiet = await settle(0);
-      const strong = await settle(40);
+      const strong = await settle(maxCoupling);
       assert.ok(strong > quiet + 0.02, `local order did not rise with coupling: ${quiet} -> ${strong}`);
     });
 

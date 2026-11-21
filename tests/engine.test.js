@@ -318,7 +318,8 @@ test('a synchronised field stays synchronised and an incoherent one does not ari
  * organises into domains, not globally), so a visitor moving the dial sees
  * nothing change. localOrder() measures the same thing at the scale where
  * organisation does happen, and is what the UI shows alongside it. These
- * numbers are measured, not derived: coupling 0 -> 0.135, coupling 40 -> 0.296.
+ * numbers are measured, not derived, on this 84x56 test grid (not the viewport-sized
+ * grid the app builds) at damping 0 and noise 0.02.
  */
 test('localOrder rises with coupling while global order stays flat', () => {
   const run = (coupling) => {

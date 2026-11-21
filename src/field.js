@@ -77,6 +77,19 @@ export class Field {
     this.mapOrigin = [0, 0];
     this.mapSpan = [1, 1];
     this._lap = new Float32Array(n);
+    /*
+     * The field's own generator for phase noise, reseeded by randomize().
+     *
+     * This used to call Math.random(), which made every run of a supposedly
+     * deterministic pose different: the golden suite seeds phases, then evolves a
+     * fixed number of steps at the UI's noise setting, so the noise draw was
+     * unpinned while everything else was not. Observed as a one-off CI failure
+     * where phone-landscape-field mismatched 93.9% of pixels and the same commit
+     * passed on rerun. Deterministic here does NOT mean predictable to a visitor:
+     * each session still starts from a fresh seed, so the field is as varied as
+     * before -- only a named pose stops moving between runs.
+     */
+    this.random = makeRandom(1);
   }
 
   index(col, row) {
@@ -133,7 +146,10 @@ export class Field {
 
   /** Re-seed phases (and optionally drop all energy). */
   randomize(seed, { keepGains = false } = {}) {
-    const random = makeRandom(seed);
+    // Same seed drives both the initial phases and the noise that follows, so a
+    // seeded pose is reproducible end to end. See the note on this.random.
+    this.random = makeRandom(seed);
+    const random = this.random;
     for (let i = 0; i < this.phase.length; i++) {
       this.phase[i] = random();
       if (!keepGains) {
@@ -201,9 +217,10 @@ export class Field {
     const k = coupling * dt;
     const amplitude = 1 - clamp(this.damping * dt, 0, 1);
     const noiseStep = noise * Math.sqrt(dt);
+    const random = this.random;
     for (let i = 0; i < phase.length; i++) {
       let next = phase[i] + (freq[i] * scale + k * lap[i] * 0.25) * dt;
-      if (noiseStep > 0) next += (Math.random() - 0.5) * noiseStep;
+      if (noiseStep > 0) next += (random() - 0.5) * noiseStep;
       // gain makes an excited cell run slightly sharp: a brightening shimmer.
       next += gain[i] * 0.06 * dt;
       // A cycle is detected by overshoot rather than by comparing the wrapped

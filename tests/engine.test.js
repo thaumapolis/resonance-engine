@@ -525,3 +525,34 @@ test('palettes produce a full, monotone-ish, in-gamut ramp', () => {
     assert.ok(bright > dark * 4, `${name} lacks contrast`);
   }
 });
+
+/*
+ * Reproducibility of the field's own noise.
+ *
+ * step() perturbs phase by `noise`, and that draw used to come from Math.random().
+ * It did not show up as a golden mismatch because every pinned pose evolves with
+ * noise: 0 -- so the unpinned path was only the live simulation, where nobody
+ * could see it. It surfaced instead as a flaky CI golden (phone-landscape-field,
+ * 93.9% mismatch on one run of a commit that passed on rerun), which is what
+ * pointed at it.
+ *
+ * The invariant that matters is: a seeded field plus a fixed number of steps and a
+ * NON-ZERO noise setting is bit-for-bit repeatable. Asserting on noise 0 would pass
+ * even with Math.random() back in place, so the noise argument is the test.
+ */
+test('a seeded field evolves identically across runs even with noise on', () => {
+  const fingerprint = (seed) => {
+    const field = new Field(40, 30, { coupling: 12, noise: 0.05 });
+    field.randomize(seed);
+    for (let i = 0; i < 600; i++) {
+      field.step(1 / 60, { coupling: 12, noise: 0.05 });
+    }
+    let hash = 0;
+    for (let i = 0; i < field.phase.length; i++) {
+      hash = (hash * 31 + Math.round(field.phase[i] * 1e6)) >>> 0;
+    }
+    return hash;
+  };
+  assert.equal(fingerprint(0xc0ffee), fingerprint(0xc0ffee), 'same seed diverged between runs');
+  assert.notEqual(fingerprint(0xc0ffee), fingerprint(0x51ee7), 'different seeds produced the same field');
+});

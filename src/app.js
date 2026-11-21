@@ -1243,6 +1243,14 @@ function publishDebugHandle() {
       reTune();
     },
     burst,
+    /**
+     * Seed the field through the same path `reseed` uses, so a caller can pin
+     * the state a Burst starts from. `burst()` itself leaves the seed alone --
+     * correct for a visitor, who should get a fresh field each session -- which
+     * is why an image generator that calls it must seed first or it cannot
+     * reproduce its own output on another machine.
+     */
+    seedField: (value) => reseed(value),
     resetDefaults: resetAll,
     lastPlayedMidi: () => (lastPlayed ? lastPlayed.midi : null),
     probeCommands: () => {

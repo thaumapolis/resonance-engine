@@ -17,7 +17,9 @@
  * with { alpha: false }, and a screenshot of such a canvas has here come out
  * black while reading its pixels with the same call returns correct data.
  *
- * Deterministic: the pose is seeded, and reduced motion removes the decorative
+ * Deterministic: the pose is pinned by an explicit seed (see seedField below --
+ * burst() alone does not seed it, so an earlier version of this file was not
+ * reproducible across machines), and reduced motion removes the decorative
  * transitions that would otherwise make the capture depend on timing.
  *
  *   PLAYWRIGHT_ENTRY=... node tools/capture-card.mjs
@@ -79,6 +81,13 @@ await page.evaluate(async () => {
   // visitor sees ~6 s after pressing it. Fixed step count rather than wall time
   // so the card is reproducible. Driven through the exposed field so this needs
   // no new app surface; the loop is the same one settlePose('idle') uses.
+  //
+  // seedField first, or nothing here is reproducible across machines. burst()
+  // deliberately leaves the seed alone so a visitor gets a fresh field each
+  // session, so an unseeded burst depends on Math.random(): observed as two
+  // captures on this machine differing in 53.76% of pixels (max channel delta
+  // 164), while each one re-runs byte-identical. Locally stable, globally not.
+  api.seedField(0xcafe0000);
   api.burst();
   api.setRunning(false);
   const { field, state } = api;

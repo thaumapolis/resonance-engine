@@ -228,8 +228,11 @@ export class Field {
    *
    * Global order stays near zero here no matter how strong the coupling, because
    * nearest-neighbour diffusion on a large periodic grid organises into domains
-   * and travelling waves rather than one phase. Measured with the shipped grid:
-   * coupling 0 -> 0.135, coupling 40 -> 0.296, against global 0.008 -> 0.022.
+   * and travelling waves rather than one phase. Measured on the desktop grid
+   * (180x138, seed 0xc0ffee, 15 s at noise 0.05): local order 0.129 at coupling 0
+   * rising to 0.252 at 24 and 0.265 at 40 -- so 90.6% of the whole 0..40 response
+   * happens by 24, which is why the slider stops there -- while global order
+   * wanders between 0.001 and 0.011 across the same sweep.
    * So "how organised is it?" has to be asked at the scale where organisation
    * happens -- which is also the scale the renderer draws.
    */

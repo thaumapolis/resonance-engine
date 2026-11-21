@@ -86,6 +86,13 @@ const TOGGLE_KEYS = [
   ['c-waveform', 'showWaveform'],
 ];
 
+/**
+ * The coupling slider's maximum, read from the control rather than repeated here.
+ * `mutate()` needs the same bound the visitor can reach: a hardcoded copy would
+ * silently allow a coupling the UI cannot show once the markup changes.
+ */
+const COUPLING_MAX = Number(document.getElementById('c-coupling').max);
+
 /** Everything the simulation and the music read. Single source of truth. */
 const state = {
   running: true,
@@ -923,7 +930,10 @@ function mutate() {
   const scales = SCALE_NAMES;
   state.scale = scales[Math.floor(Math.random() * scales.length)];
   state.root = NOTE_NAMES[Math.floor(Math.random() * NOTE_NAMES.length)];
-  state.coupling = clamp(6 + Math.random() * 30, 0, 40);
+  // Kept inside the slider's range (see #c-coupling): a mutated coupling above the
+  // maximum would leave the control pinned at full while the simulation ran with a
+  // value nobody can select or see.
+  state.coupling = clamp(COUPLING_MAX * 0.25 + Math.random() * COUPLING_MAX * 0.75, 0, COUPLING_MAX);
   state.octaves = clamp(1.5 + Math.random() * 4, 1, 6);
   document.getElementById('c-scale').value = state.scale;
   document.getElementById('c-root').value = state.root;

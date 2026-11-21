@@ -103,12 +103,12 @@
       <section>
         <h2>Physics</h2>
         <label>Coupling <output id="v-c-coupling"></output>
-          <input id="c-coupling" type="range" min="0" max="40" step="0.5" value="12">
+          <input id="c-coupling" type="range" min="0" max="24" step="0.5" value="12">
         </label>
         <label>Noise <output id="v-c-noise"></output>
           <input id="c-noise" type="range" min="0" max="0.4" step="0.005" value="0.05">
         </label>
-        <p class="hint">Coupling is how hard each metronome pulls on its neighbours. Raise it and local groups lock together sooner and hold longer after you drag; lower it and they drift apart faster. It does <em>not</em> make the whole grid agree — the pitch spread across the screen is wider than the coupling can bridge, so <em>Order</em> stays near zero at every setting. Watch the waves glow instead of the number.</p>
+        <p class="hint">Coupling is how hard each metronome pulls on its neighbours. It works at the scale of a few cells, which is why you watch it in the picture rather than in <em>Order</em>: local order climbs steadily as you raise it, while the whole-grid figure stays near zero because the pitch spread across the screen is wider than nearest-neighbour coupling can bridge. Past the top of this range nothing further changes, so the dial stops where the physics does.</p>
       </section>
 
       <section>

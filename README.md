@@ -161,7 +161,12 @@ canvas), **Volume**, **Space** (delay + reverb send). Selects choose scale,
 root, frequency map, which axis the pointer plays, and palette.
 
 **Coupling is the dial to explore.** It sets how strongly neighbours listen: at 0
-the grid is pure noise, mid-range it organises into travelling waves and spirals.
+the grid is incoherent, and raising it organises ever larger neighbourhoods into
+wavefronts. It is a *local* effect -- see below -- which is why the dial stops at
+24: measured on the desktop grid, local order reaches 0.252 by coupling 24 out of
+0.265 at the old maximum of 40, so **90.6% of the whole response happens in what
+is now the full range**. Giving the top 40% of the previous travel nothing to do
+made the control feel dead exactly where a visitor would drag it looking for more.
 
 Be clear about what "locking" means here. **The Order readout will stay near
 zero**, and that is correct rather than a fault: every column is tuned to a
@@ -169,15 +174,16 @@ different pitch, and a ~24× spread of natural frequencies across the grid canno
 be globally synchronised by nearest-neighbour coupling at any setting the slider
 offers. Measured across the whole slider range, order goes 0.010 → 0.019. What
 coupling *does* change, and what the renderer deliberately draws, is **local**
-agreement: the mean neighbour phase gap falls from 0.250 to 0.179, and it is that
-local disagreement the brightness maps, so wavefronts glow as coupling organises
-the grid.
+agreement -- reported as **Local order**, and it is the local disagreement the
+brightness maps, so wavefronts glow as coupling organises the grid.
 
 So the panel reads **both** numbers: **Order** for the whole grid, and **Local
 order** — synchrony inside 7×7 neighbourhoods — which is the one that moves when
-you turn the dial. Measured live in the browser at coupling 0 → 40: Order
-0.004 → 0.013 (nothing, correctly), Local order 0.150 → 0.230. Showing only the
-global figure made the most responsive control in the app look dead.
+you turn the dial. Measured live in the browser across the current 0→24 range:
+Order 0.012 → 0.015 (nothing, correctly), Local order 0.141 → 0.160 → 0.191 → 0.223
+→ 0.246 -- monotonic and spread over the whole travel, so the number tracks the
+thumb. Showing only the global figure made the most responsive control in the app
+look dead.
 
 Global synchrony is reachable in the engine — a near-uniform field closes its
 phase gaps monotonically with coupling, which `tests/engine.test.js` asserts —

@@ -300,6 +300,17 @@ try {
     });
 
     await check('canvas is pixel-populated, not a blank rectangle', async () => {
+      // Wait for content rather than sampling at frame 0: see the note in the
+      // file-url/opaque-frame check below about why an immediate sample can be dark.
+      await driver.waitForFunction(() => {
+        const canvas = document.getElementById('field');
+        const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+        let lit = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] + data[i + 1] + data[i + 2] > 60) lit += 1;
+        }
+        return lit > data.length / 4 * 0.02;
+      }, null, { timeout: 4000 });
       const stats = await driver.evaluate(() => {
         const canvas = document.getElementById('field');
         const gl = canvas.getContext('2d');
@@ -975,6 +986,29 @@ try {
           }
           return { lit, frames: window.__resonance.tickCounter(), pixels: data.length / 4 };
         });
+
+        /*
+         * Require that it PAINTS, not that it has already painted the instant the
+         * handle appears. __resonance exists before the field has accumulated any
+         * energy, so sampling immediately can legitimately see a dark canvas -- this
+         * assertion read that as "unpainted" and failed intermittently (observed on
+         * Chromium in CI: canvas unpainted 0/3782 lit, on a commit whose sibling
+         * opaque-frame check passed the same shape). The wait is bounded, so a field
+         * that genuinely never paints still fails, just with a useful message.
+         */
+        await (await target()).waitForFunction(
+          () => {
+            const canvas = document.getElementById('field');
+            const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+            let lit = 0;
+            for (let i = 0; i < data.length; i += 4) {
+              if (data[i] + data[i + 1] + data[i + 2] > 60) lit += 1;
+            }
+            return lit > data.length / 4 * 0.02;
+          },
+          null,
+          { timeout: 4000 },
+        );
 
         const first = await paint();
         await probe.waitForTimeout(300);

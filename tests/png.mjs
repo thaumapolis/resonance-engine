@@ -99,6 +99,19 @@ const paeth = (a, b, c) => {
 };
 
 /**
+ * Width and height from the IHDR chunk, without inflating the image.
+ *
+ * Deliberately not `decodePng(...).width`: a mismatch report should name the
+ * dimensions, and paying a full decode to read eight bytes already at the front
+ * of the file is the wrong trade when the point is to fail fast and explain.
+ */
+export function pngSize(buffer) {
+  assert.ok(buffer.subarray(0, 8).equals(SIGNATURE), 'not a PNG (bad signature)');
+  assert.equal(buffer.subarray(12, 16).toString('latin1'), 'IHDR', 'first chunk is not IHDR');
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+/**
  * Fraction of pixels differing from the golden image by more than `threshold`
  * (0-255 per channel). Returns 1 when sizes mismatch, which callers treat as a
  * failure with its own message.

@@ -9,7 +9,7 @@
 //   nix-build gcroots.nix -A browsers --out-link .gc-roots/browsers
 //   .gc-roots/node/bin/node tests/browser.test.mjs
 import assert from 'node:assert/strict';
-import { decodePng, differenceRatio } from './png.mjs';
+import { decodePng, differenceRatio, pngSize } from './png.mjs';
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -170,9 +170,31 @@ async function freezePose(page, pose) {
   }, pose);
 }
 
-/** Compare a screenshot against its golden image, regenerating on demand. */
+/**
+ * Compare a screenshot against its golden image, regenerating on demand.
+ *
+ * The crop's size is checked against the baseline before any pixels are
+ * compared. `differenceRatio` returns 1 for a size mismatch -- by design, so
+ * its unit tests can treat it as a failure value -- but a caller that only
+ * prints that number cannot tell "the layout produced a different crop" from
+ * "the simulation drew something different", and those need opposite responses.
+ */
 async function assertGolden(page, name, options) {
   const shot = await page.screenshot({ ...options, animations: 'disabled' });
+  const goldenPath = `${GOLDEN_DIR}${name}.png`;
+  if (existsSync(goldenPath) && !shouldUpdate(name)) {
+    const expected = pngSize(readFileSync(goldenPath));
+    const actual = pngSize(shot);
+    if (actual.width !== expected.width || actual.height !== expected.height) {
+      mkdirSync(`${PROJECT_ROOT}.tmp/painted`, { recursive: true });
+      writeFileSync(`${PROJECT_ROOT}.tmp/painted/${name}.png`, shot);
+      throw new Error(
+        `the capture is ${actual.width}x${actual.height}px but ${name}.png is `
+        + `${expected.width}x${expected.height}px, so no pixel comparison is meaningful. `
+        + 'The crop changed size -- that is a layout or viewport change, not a rendering one.',
+      );
+    }
+  }
   // Keep what was painted whenever a comparison is being made, so a mismatch on
   // another machine can be inspected rather than merely counted. Written under
   // .tmp, which is gitignored.
@@ -180,7 +202,6 @@ async function assertGolden(page, name, options) {
     mkdirSync(`${PROJECT_ROOT}.tmp/painted`, { recursive: true });
     writeFileSync(`${PROJECT_ROOT}.tmp/painted/${name}.png`, shot);
   }
-  const goldenPath = `${GOLDEN_DIR}${name}.png`;
   const exists = existsSync(goldenPath);
   const recorded = shouldUpdate(name);
   if (recorded || !exists) {

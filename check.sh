@@ -90,17 +90,27 @@ fi
 
 echo
 echo "== 3/4 browser smoke test =="
-if [[ -x .gc-roots/node/bin/node && -e .gc-roots/pw/index.js ]]; then
+# The flake dev shell is the primary route: it pins node, the Playwright driver
+# and the browser set to one nixpkgs revision and exports PLAYWRIGHT_ENTRY and
+# PLAYWRIGHT_BROWSERS_PATH. The .gc-roots out-links remain supported for anyone
+# without flakes enabled, and are used only when the environment does not already
+# name a driver -- a stale out-link must not silently win over a pinned shell.
+if [[ -n ${PLAYWRIGHT_ENTRY:-} ]]; then
+  node tests/browser.test.mjs || STATUS=1
+elif [[ -x .gc-roots/node/bin/node && -e .gc-roots/pw/index.js ]]; then
   PATH="$PWD/.gc-roots/node/bin:$PATH" \
   PLAYWRIGHT_BROWSERS_PATH="$PWD/.gc-roots/browsers" \
     node tests/browser.test.mjs || STATUS=1
 else
-  echo "FAIL: browser toolchain absent, so no page was painted. Bootstrap with:" >&2
+  echo "FAIL: browser toolchain absent, so no page was painted." >&2
   STATUS=1
   echo
-  echo "  nix-build gcroots.nix -A pw        --out-link .gc-roots/pw"
-  echo "  nix-build gcroots.nix -A browsers  --out-link .gc-roots/browsers"
-  echo "  nix-build gcroots.nix -A node      --out-link .gc-roots/node"
+  echo "  nix develop --command ./check.sh" >&2
+  echo
+  echo "or, without flakes:" >&2
+  echo "  nix-build gcroots.nix -A pw        --out-link .gc-roots/pw" >&2
+  echo "  nix-build gcroots.nix -A browsers  --out-link .gc-roots/browsers" >&2
+  echo "  nix-build gcroots.nix -A node      --out-link .gc-roots/node" >&2
 fi
 
 echo

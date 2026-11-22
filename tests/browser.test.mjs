@@ -5,9 +5,10 @@
 // spawning an HTTP server: the sandbox forbids bind()/socket(), and a served
 // origin (not file://) is required for ES modules and Web Audio to behave.
 //
-//   nix-build gcroots.nix -A pw --out-link .gc-roots/pw        # once
-//   nix-build gcroots.nix -A browsers --out-link .gc-roots/browsers
-//   .gc-roots/node/bin/node tests/browser.test.mjs
+//   nix develop --command node tests/browser.test.mjs
+//
+// PLAYWRIGHT_ENTRY names the driver and PLAYWRIGHT_BROWSERS_PATH the browser
+// set; the flake dev shell sets both. See resolveDriver() below.
 import assert from 'node:assert/strict';
 import { decodePng, differenceRatio, pngSize } from './png.mjs';
 import { createRequire } from 'node:module';
@@ -16,7 +17,33 @@ import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 
 const require = createRequire(import.meta.url);
-const { chromium, firefox } = require(new URL('../.gc-roots/pw/index.js', import.meta.url).pathname);
+
+/**
+ * Where the Playwright driver comes from.
+ *
+ * Inside the flake dev shell it is `$PLAYWRIGHT_ENTRY`, which is the driver
+ * built from the same pinned nixpkgs as the browser set in
+ * `$PLAYWRIGHT_BROWSERS_PATH` -- driver and browsers must agree on revision or
+ * the launch fails with the suite reporting 0/0 and exiting 0.
+ *
+ * The `.gc-roots/pw` out-link is still honoured so the historical
+ * `nix-build gcroots.nix` route keeps working, but it is a fallback, not the
+ * primary: silently preferring a stale out-link over an environment that
+ * already names the right driver is how a suite ends up testing a browser
+ * nobody pinned.
+ */
+function resolveDriver() {
+  const fromEnv = process.env.PLAYWRIGHT_ENTRY;
+  if (fromEnv !== undefined && fromEnv !== '') return fromEnv;
+  const outLink = new URL('../.gc-roots/pw/index.js', import.meta.url).pathname;
+  if (existsSync(outLink)) return outLink;
+  throw new Error(
+    'no Playwright driver: run inside the project shell (nix develop --command '
+    + './check.sh), or set PLAYWRIGHT_ENTRY to a playwright-driver index.mjs',
+  );
+}
+
+const { chromium, firefox } = require(resolveDriver());
 
 /** `BROWSERS=chromium node tests/browser.test.mjs` runs one engine only. */
 const ENGINES = (process.env.BROWSERS ?? 'chromium,firefox')

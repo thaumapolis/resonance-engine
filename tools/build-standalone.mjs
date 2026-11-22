@@ -138,8 +138,20 @@ export function renderStandalone() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  mkdirSync(path.join(root, '.tmp'), { recursive: true });
+  const destination = process.argv[2]
+    ? path.resolve(process.argv[2])
+    : path.join(root, OUTPUT);
+  // .tmp belongs to the local workflow only. Under `nix build` the source tree
+  // is a read-only store path and mkdir there dies with EACCES before a single
+  // byte of the artifact is written.
+  if (destination === path.join(root, OUTPUT)) {
+    mkdirSync(path.join(root, '.tmp'), { recursive: true });
+  }
   const html = renderStandalone();
-  writeFileSync(path.join(root, OUTPUT), html);
-  console.log(`${OUTPUT}: ${(html.length / 1024).toFixed(1)} KB`);
+  // Default to index.html beside the sources. An explicit destination exists for
+  // the Nix build, where writing next to src/ is impossible; Nix hands over the
+  // $out path but does not create it, so make its parent before writing.
+  mkdirSync(path.dirname(destination), { recursive: true });
+  writeFileSync(destination, html);
+  console.log(`${path.basename(destination)}: ${(html.length / 1024).toFixed(1)} KB`);
 }

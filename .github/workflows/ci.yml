@@ -1,13 +1,15 @@
 name: CI
 
-# One job per engine, each running check.sh end to end -- types, the 65 unit and
+# One job per engine, each running check.sh end to end -- types, the unit and
 # wiring tests, and the painted page with that engine's golden frames. There is
 # deliberately no second definition of the acceptance checklist here: if the two
 # disagree, CI proves something other than what a contributor sees.
 #
-# Nix supplies node, Deno, Playwright and Firefox. There is no setup-node and no
-# npm install because the project has no Node dependencies: the modules import
-# each other and `node:*` only.
+# The toolchain comes from the pinned flake.lock, so CI and `nix develop` resolve
+# the same node, Deno, esbuild, Playwright driver and browser set. That replaces
+# `nix-shell shell.nix` plus a `nix-build gcroots.nix` bootstrap whose NIX_PATH
+# had to be a tarball URL because a `github:` specifier is split on ':' by
+# NIX_PATH -- a trap this flake removes rather than documents around.
 
 on:
   push:
@@ -34,50 +36,26 @@ jobs:
       fail-fast: false
       matrix:
         browsers: [firefox, chromium]
-    env:
-      # gcroots.nix and shell.nix both say `import <nixpkgs>`, and a runner has
-      # no Nix channel, so every nix-build dies with "file 'nixpkgs' was not
-      # found in the Nix search path" -- how the first three runs of this
-      # workflow failed, on both engines, in the bootstrap step.
-      #
-      # A `github:` URL does NOT work here, which is the non-obvious part: ':'
-      # separates entries in NIX_PATH, so Nix reads `github:NixOS/nixpkgs/REV`
-      # as two missing paths and warns twice before failing the same way. Observed
-      # verbatim:
-      #   warning: Nix search path entry 'github' does not exist, ignoring
-      #   warning: Nix search path entry 'NixOS/nixpkgs/5e867b1d...' does not exist
-      # A percent-encoded colon is no better. The tarball URL contains no colon,
-      # so it survives the split -- verified locally against this exact revision.
-      #
-      # Revision is the one Flux Pond's flake.lock pins, so the projects share a
-      # binary cache and a browser rather than drifting.
-      NIX_PATH: nixpkgs=https://github.com/NixOS/nixpkgs/archive/5e867b1db0f219e0e906574cca1175f421a87834.tar.gz
     steps:
       - uses: actions/checkout@v4
-      # Pinned by commit, the way Flux Pond pins it, so a floating tag cannot
-      # break the build underneath a green badge.
       - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
-      - name: Bootstrap the browser out-links check.sh looks for
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            http2 = false
+            fallback = true
+      # packages.default is the shipped artifact, so a broken package build has to
+      # be a red build. Nothing else would catch it: the checklist runs
+      # `nix develop`, which does not build the package at all.
+      - name: Build the package and check it matches the committed artifact
         run: |
-          mkdir -p .gc-roots
-          nix-build gcroots.nix -A pw --out-link .gc-roots/pw
-          nix-build gcroots.nix -A browsers --out-link .gc-roots/browsers
-          nix-build gcroots.nix -A node --out-link .gc-roots/node
-      # esbuild needs no step of its own: shell.nix provides it and the next step
-      # runs inside that shell. It used to be found by globbing /nix/store for an
-      # esbuild already present, so CI failed on a clean runner with "esbuild not
-      # found" while passing on the machine that wrote it -- the same failure as a
-      # hardcoded store path, by another route.
-      #
-      # check.sh rather than a hand-rolled invocation: the out-link paths and
-      # PLAYWRIGHT_BROWSERS_PATH are already its business, and repeating them
-      # lets CI and a local run drift apart. A phase whose toolchain is missing
-      # fails the run instead of skipping, so a bootstrap that half-worked
-      # cannot report success.
+          # Addressed by store path, not a result symlink: --no-link creates none.
+          OUT=$(nix build --no-link --print-out-paths)
+          test "$(sha256sum < "$OUT/index.html")" = "$(sha256sum < index.html)"
       - name: Type check, unit tests, painted page
         env:
           BROWSERS: ${{ matrix.browsers }}
-        run: nix-shell shell.nix --run ./check.sh
+        run: nix develop --command ./check.sh
       # A runner paints pixels this machine did not, and a percentage mismatch is
       # unreadable without seeing what it drew. Only on failure, so a green run
       # uploads nothing.

@@ -4,7 +4,7 @@
 
 **[▶ Play it live](https://raw.githack.com/thaumapolis/resonance-engine/master/index.html) · [CI](https://github.com/thaumapolis/resonance-engine/actions/workflows/ci.yml)**
 
-A toroidal field of coupled oscillators -- some 24,840 of them on a desktop
+A toroidal field of coupled oscillators -- some 77,592 of them on a desktop
 screen, fewer on a phone, since the grid is derived from the window rather than
 fixed -- that is also an instrument. The
 physics is genuine Kuramoto-style phase coupling, so the grid self-organises

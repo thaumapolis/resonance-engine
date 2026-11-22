@@ -35,14 +35,22 @@ const LOOKAHEAD = 0.12;
  * CELL_TARGET is a CSS-pixel target, so the grid adapts to the box: a desktop
  * stage gets a denser field than a phone, and neither is upscaled.
  * MAX_CELLS bounds the cost, because the physics is O(cells) per tick and the
- * audio scheduler takes work from every firing cell. Measured on this container
- * (see tools/bench-field.mjs): 4,704 cells cost 0.19 ms/tick and 42,336 cost
- * 1.96 ms/tick against a 16.7 ms frame budget, so the cap at 26,000 -- about
- * 24,840 on a 1440x900 desktop stage -- stays comfortably inside 60 fps and
- * below the point where a slower phone would start dropping frames.
+ * audio scheduler takes work from every firing cell.
+ *
+ * The cap is set by measurement, not by guess. Halving CELL_TARGET from 6 to 3
+ * was tried because cell size on screen -- not the bitmap -- is what makes a
+ * diagonal read as a staircase: at 6 CSS px/cell the desktop grid is 154x125
+ * (19,250 cells) and wavefronts are visible blobs; at 3 it is 308x251 (77,308
+ * cells) and the same wavefronts are crisp continuous lines. Measured with
+ * trails on, the whole render path is unchanged at 17.06 ms median and 17.1 ms
+ * p95 frame interval across 60 frames at both settings, holding 60 fps on a
+ * 1280x820 desktop stage and a 390x844 phone (122x124 cells). The physics alone
+ * costs 0.81 ms/tick at 19,250 cells and 2.16 ms/tick at 77,000, so the frame
+ * budget is not what the cap is protecting against -- a slower phone is, and
+ * 78,000 is roughly where the desktop box saturates at CELL_TARGET=3 anyway.
  */
-const CELL_TARGET = 6;
-const MAX_CELLS = 26_000;
+const CELL_TARGET = 3;
+const MAX_CELLS = 78_000;
 /** Kept so a grid derived at boot is the same number everywhere in the module. */
 let COLS = 84;
 let ROWS = 56;

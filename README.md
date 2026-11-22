@@ -242,23 +242,33 @@ Two decisions worth knowing:
 ## Checks
 
 ```sh
-nix-shell shell.nix --run ./check.sh
+nix develop --command ./check.sh
 ```
 
-Runs three phases: `deno check` (types over all ten modules), 65 unit tests
-(physics, music, the HTML/JS boundary, the image comparator itself, and
-`serve.py`'s address resolution), and 48 Playwright browser checks including
-golden screenshots.
+Runs four phases: the committed `index.html` against a fresh build of `src/`;
+`deno check` (types over all ten modules); 69 unit tests (physics, music, the
+HTML/JS boundary, the image comparator itself, and `serve.py`'s address
+resolution); and 50 Playwright browser checks including golden screenshots.
 
-The shell is what puts `deno` on `PATH`; a bare `./check.sh` outside it prints
-which tool is missing and how to get it. Phase 3 additionally needs the browser
-toolchain:
+The flake is the source of truth for the toolchain -- node, Deno, esbuild, the
+Playwright driver and the browser set, all from one pinned `flake.lock` -- and
+the dev shell exports `PLAYWRIGHT_ENTRY` and `PLAYWRIGHT_BROWSERS_PATH` from it,
+so CI and a local run resolve the same environment. A bare `./check.sh` outside
+it prints which tool is missing and how to get it.
+
+Without flakes enabled, `shell.nix` provides the same packages unpinned, and the
+browser checks fall back to out-links:
 
 ```sh
+nix-shell shell.nix --run ./check.sh
+# or, for phase 4 alone:
 nix-build gcroots.nix -A pw       --out-link .gc-roots/pw
 nix-build gcroots.nix -A browsers --out-link .gc-roots/browsers
 nix-build gcroots.nix -A node     --out-link .gc-roots/node
 ```
+
+`nix build` produces the same artifact in the store, and CI asserts it is
+byte-identical to the committed `index.html`.
 
 A phase that cannot run **fails** the run rather than skipping it, so
 `ALL CHECKS PASSED` means every phase actually executed. Both halves of that

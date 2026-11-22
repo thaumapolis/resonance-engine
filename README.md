@@ -38,7 +38,9 @@ motion** — you are watching energy, not colour and not position.
 **Drag anywhere.** You paint a bright trail and hear notes; higher on screen is
 higher pitch. That single gesture is the instrument. Try **Burst** (or `b`) to
 set every cell going at once, then raise **Coupling** and watch local groups lock
-together sooner and hold longer. Coupling does **not** unify the whole grid: the
+together sooner and hold longer. It takes a while: at the default the field is
+still organising after ten seconds, so give it half a minute before deciding the
+dial does nothing. Coupling does **not** unify the whole grid: the
 pitch spread across the screen is wider than nearest-neighbour coupling can bridge,
 so the **Order** figure stays near zero at every setting -- that is the simulation
 being honest, not a broken control.
@@ -56,7 +58,9 @@ Start button, by `Escape`, or by just starting to drag.
   Zero at rest. This is "what have I done lately".
 - **Coupling** — how strongly neighbours listen. The dial that matters.
 - **Local order** — how much nearby clumps agree. This is the number that rises
-  when you increase coupling.
+  when you increase coupling, over about twenty seconds: from 0.127 at rest,
+  coupling 24 reaches 0.148 after 1 s, 0.196 after 4 s, 0.228 after 8 s and 0.257
+  after 15 s. Those are read from the panel itself, in the running app.
 - **Order** — global synchrony. **Stays near zero, correctly.** Each column wants
   a different pitch, so the grid organises into travelling waves rather than one
   unison; a grid locked to a single pitch could not make a melody either.

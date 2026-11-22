@@ -374,8 +374,20 @@ try {
         await driver.mouse.move(box.x + box.width * (0.3 + 0.4 * (i / 12)), box.y + box.height * 0.5);
       }
       await driver.mouse.up();
-      const activity = await driver.evaluate(() => window.__resonance.field.activity());
-      assert.ok(activity > 0.01, `drag left no energy: ${activity}`);
+      /*
+       * Count excited cells, not the fraction of the grid that is excited.
+       * `activity()` divides by cell count, so its value scales with the grid
+       * even when the drag paints exactly the same stroke: with the stroke
+       * fixed at radius 3.2 cells, quadrupling the grid quadruples the
+       * denominator. Chromium measured 0.00886 against a 0.01 threshold on the
+       * denser grid while firefox measured 0.0185 -- same app behaviour,
+       * different yardstick. The stroke's own footprint is grid-independent and
+       * still distinguishes a drag that paints from one that does not.
+       */
+      const painted = await driver.evaluate(
+        () => [...window.__resonance.field.gain].filter((g) => g > 0.05).length,
+      );
+      assert.ok(painted > 100, `drag left only ${painted} excited cells`);
     });
 
     await check('keyboard input plays a note and updates the readout', async () => {
